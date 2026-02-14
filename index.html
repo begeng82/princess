@@ -1,117 +1,146 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Hand Tracking Full</title>
-  <style>
-    body {
-      margin: 0;
-      background: black;
-      text-align: center;
-      color: white;
-      font-family: Arial;
-    }
-    video, canvas {
-      position: absolute;
-      left: 0;
-      top: 0;
-    }
-    #gesture {
-      position: fixed;
-      bottom: 20px;
-      width: 100%;
-      font-size: 30px;
-      font-weight: bold;
-      color: lime;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Hand Gesture Particle FX</title>
+<style>
+body {
+  margin:0;
+  overflow:hidden;
+  background:black;
+  font-family:Arial;
+}
+video,canvas{
+  position:absolute;
+  top:0; left:0;
+}
+#text{
+  position:fixed;
+  bottom:20px;
+  width:100%;
+  text-align:center;
+  color:cyan;
+  font-size:28px;
+  text-shadow:0 0 15px cyan;
+}
+.particle{
+  position:absolute;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  pointer-events:none;
+  animation: explode 1.5s linear forwards;
+}
+@keyframes explode{
+  from{opacity:1;transform:translate(0,0) scale(1);}
+  to{opacity:0;transform:translate(var(--x),var(--y)) scale(0);}
+}
+</style>
 </head>
 <body>
 
 <video id="video" autoplay playsinline></video>
 <canvas id="canvas"></canvas>
-<div id="gesture">Loading...</div>
+<div id="text">Show your hand ✋</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const gestureText = document.getElementById("gesture");
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+const text=document.getElementById("text");
 
-canvas.width = 640;
-canvas.height = 480;
-video.width = 640;
-video.height = 480;
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+video.width=640;
+video.height=480;
 
-const hands = new Hands({
-  locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-  }
+const hands=new Hands({
+  locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
 hands.setOptions({
-  maxNumHands: 1,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.7,
-  minTrackingConfidence: 0.7
+  maxNumHands:1,
+  modelComplexity:1,
+  minDetectionConfidence:0.7,
+  minTrackingConfidence:0.7
 });
 
-hands.onResults(results => {
+let lastGesture="";
+
+hands.onResults(results=>{
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(results.image,0,0,canvas.width,canvas.height);
 
   if(results.multiHandLandmarks){
-    for(const landmarks of results.multiHandLandmarks){
-      drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color:'#00FF00', lineWidth:3});
-      drawLandmarks(ctx, landmarks, {color:'#FF0000', lineWidth:2});
-      detectGesture(landmarks);
-    }
+    const lm=results.multiHandLandmarks[0];
+    drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:"#00ffff",lineWidth:3});
+    drawLandmarks(ctx,lm,{color:"#ff00ff",lineWidth:2});
+    detectGesture(lm);
   } else {
-    gestureText.innerText = "No hand detected";
+    text.innerText="Show your hand ✋";
   }
 });
 
-const camera = new Camera(video,{
-  onFrame: async ()=>{
-    await hands.send({image: video});
-  },
+const camera=new Camera(video,{
+  onFrame:async()=>{await hands.send({image:video});},
   width:640,
   height:480
 });
-
 camera.start();
 
-function detectGesture(lm){
-  let thumb = lm[4].y < lm[3].y;
-  let index = lm[8].y < lm[6].y;
-  let middle = lm[12].y < lm[10].y;
-  let ring = lm[16].y < lm[14].y;
-  let pinky = lm[20].y < lm[18].y;
-
-  let gesture = "Unknown";
-
-  if(index && middle && ring && pinky && thumb){
-    gesture = "✋ Open Hand";
-  }
-  else if(!index && !middle && !ring && !pinky){
-    gesture = "✊ Fist";
-  }
-  else if(thumb && !index && !middle && !ring && !pinky){
-    gesture = "👍 Thumbs Up";
-  }
-  else if(index && middle && !ring && !pinky){
-    gesture = "✌ Peace";
-  }
-  else if(thumb && index && !middle && !ring && !pinky){
-    gesture = "👌 OK";
-  }
-
-  gestureText.innerText = "Gesture: " + gesture;
+function isUp(lm,tip,pip){
+  return lm[tip].y < lm[pip].y;
 }
+
+function detectGesture(lm){
+  let thumb=isUp(lm,4,2);
+  let index=isUp(lm,8,6);
+  let middle=isUp(lm,12,10);
+  let ring=isUp(lm,16,14);
+  let pinky=isUp(lm,20,18);
+
+  let gesture="";
+
+  if(index && middle && ring && pinky && thumb) gesture="OPEN HAND ✋";
+  else if(!index && !middle && !ring && !pinky) gesture="FIST ✊";
+  else if(index && !middle && !ring && !pinky) gesture="POINT ☝️";
+  else if(index && middle && !ring && !pinky) gesture="PEACE ✌️";
+  else if(thumb && !index && !middle && !ring && !pinky) gesture="LIKE 👍";
+  else if(index && middle && ring && !pinky) gesture="THREE 🤟";
+  else if(index && middle && ring && pinky && !thumb) gesture="FOUR 🖐";
+  else if(thumb && index && !middle && !ring && !pinky) gesture="OK 👌";
+  else gesture="UNKNOWN";
+
+  if(gesture!==lastGesture){
+    spawnParticles();
+    lastGesture=gesture;
+  }
+
+  text.innerText="Gesture: "+gesture;
+}
+
+function spawnParticles(){
+  for(let i=0;i<80;i++){
+    const p=document.createElement("div");
+    p.className="particle";
+    p.style.left=window.innerWidth/2+"px";
+    p.style.top=window.innerHeight/2+"px";
+    p.style.background=`hsl(${Math.random()*360},100%,60%)`;
+    p.style.setProperty("--x",(Math.random()-0.5)*600+"px");
+    p.style.setProperty("--y",(Math.random()-0.5)*600+"px");
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),1500);
+  }
+}
+
+window.addEventListener("resize",()=>{
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+});
 </script>
 
 </body>
