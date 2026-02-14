@@ -1,225 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Hand Gesture Love 💖</title>
-<style>
-body {
-  margin:0;
-  overflow:hidden;
-  background:black;
-  font-family: Arial;
-}
-
-video {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  width: 140px;
-  border-radius: 10px;
-  opacity: 0.6;
-}
-
-#text {
-  position:absolute;
-  bottom:20px;
-  width:100%;
-  text-align:center;
-  color:cyan;
-  font-size:24px;
-  animation: glow 2s infinite alternate;
-}
-
-@keyframes glow {
-  from {text-shadow:0 0 5px cyan;}
-  to {text-shadow:0 0 20px cyan;}
-}
-
-.heart {
-  position:absolute;
-  font-size:24px;
-  animation: float 2s linear forwards;
-}
-
-@keyframes float {
-  from {opacity:1;}
-  to {transform: translateY(-150px); opacity:0;}
-}
-</style>
+  <meta charset="UTF-8">
+  <title>Hand Tracking Full</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      text-align: center;
+      color: white;
+      font-family: Arial;
+    }
+    video, canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+    #gesture {
+      position: fixed;
+      bottom: 20px;
+      width: 100%;
+      font-size: 30px;
+      font-weight: bold;
+      color: lime;
+    }
+  </style>
 </head>
 <body>
 
 <video id="video" autoplay playsinline></video>
-<div id="text">Show your hand ✋</div>
+<canvas id="canvas"></canvas>
+<div id="gesture">Loading...</div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
 const video = document.getElementById("video");
-const text = document.getElementById("text");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const gestureText = document.getElementById("gesture");
 
-// MEDIAPIPE HANDS
+canvas.width = 640;
+canvas.height = 480;
+video.width = 640;
+video.height = 480;
+
 const hands = new Hands({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+  }
 });
 
 hands.setOptions({
-  maxNumHands:1,
-  minDetectionConfidence:0.7,
-  minTrackingConfidence:0.7
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.7
 });
 
-hands.onResults(onResults);
+hands.onResults(results => {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(results.image,0,0,canvas.width,canvas.height);
 
-// CAMERA
-const cam = new Camera(video, {
-  onFrame: async () => {
-    await hands.send({image: video});
-  },
-  width: 640,
-  height: 480
-});
-cam.start();
-
-// THREE JS SCENE
-const scene = new THREE.Scene();
-const camera3D = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({alpha:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// PLANET
-const geometry = new THREE.SphereGeometry(2,64,64);
-const material = new THREE.PointsMaterial({ color:0x00ffff, size:0.02 });
-const planet = new THREE.Points(geometry, material);
-scene.add(planet);
-
-camera3D.position.z = 5;
-
-// STARS
-const starsGeo = new THREE.BufferGeometry();
-const starCount = 3000;
-const starPos = [];
-for(let i=0;i<starCount;i++){
-  starPos.push((Math.random()-0.5)*100);
-  starPos.push((Math.random()-0.5)*100);
-  starPos.push((Math.random()-0.5)*100);
-}
-starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
-const starsMat = new THREE.PointsMaterial({color:0xffffff, size:0.1});
-const stars = new THREE.Points(starsGeo, starsMat);
-scene.add(stars);
-
-// PARTICLES
-const particleGeo = new THREE.BufferGeometry();
-const particleCount = 1500;
-const positions = new Float32Array(particleCount * 3);
-
-for (let i = 0; i < particleCount * 3; i++) {
-  positions[i] = (Math.random() - 0.5) * 10;
-}
-
-particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-const particleMat = new THREE.PointsMaterial({
-  color: 0xff66ff,
-  size: 0.05,
-  transparent: true,
-  opacity: 0.8
-});
-
-const particles = new THREE.Points(particleGeo, particleMat);
-scene.add(particles);
-
-// HEART EFFECT
-function spawnHeart(x,y){
-  const heart = document.createElement("div");
-  heart.className="heart";
-  heart.innerHTML="💖";
-  heart.style.left = x+"px";
-  heart.style.top = y+"px";
-  document.body.appendChild(heart);
-  setTimeout(()=>heart.remove(),2000);
-}
-
-// PARTICLE EXPLOSION
-function explodeParticles(){
-  const pos = particles.geometry.attributes.position.array;
-  for(let i=0;i<pos.length;i+=3){
-    pos[i] += (Math.random()-0.5)*0.5;
-    pos[i+1] += (Math.random()-0.5)*0.5;
-    pos[i+2] += (Math.random()-0.5)*0.5;
-  }
-  particles.geometry.attributes.position.needsUpdate = true;
-}
-
-// FINGER CHECK
-function isFingerUp(hand, tip, pip){
-  return hand[tip].y < hand[pip].y;
-}
-
-// HAND RESULTS
-function onResults(results){
   if(results.multiHandLandmarks){
-    const h = results.multiHandLandmarks[0];
-
-    const index = isFingerUp(h,8,6);
-    const middle = isFingerUp(h,12,10);
-    const ring = isFingerUp(h,16,14);
-    const pinky = isFingerUp(h,20,18);
-
-    // OPEN HAND ✋
-    if(index && middle && ring && pinky){
-      text.innerHTML = "Open Hand ✋";
-      planet.rotation.y += 0.05;
-      explodeParticles();
-    }
-
-    // FIST ✊
-    else if(!index && !middle && !ring && !pinky){
-      text.innerHTML = "Love Explosion 💖";
-      explodeParticles();
-      for(let i=0;i<5;i++){
-        spawnHeart(Math.random()*window.innerWidth, Math.random()*window.innerHeight);
-      }
-    }
-
-    // POINT ☝️
-    else if(index && !middle && !ring && !pinky){
-      text.innerHTML = "I Love You MIESHELLA 💕";
-      explodeParticles();
-    }
-
-    // PEACE ✌️
-    else if(index && middle && !ring && !pinky){
-      text.innerHTML = "Peace ✌️";
-      planet.material.color.setHex(Math.random()*0xffffff);
-      explodeParticles();
+    for(const landmarks of results.multiHandLandmarks){
+      drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color:'#00FF00', lineWidth:3});
+      drawLandmarks(ctx, landmarks, {color:'#FF0000', lineWidth:2});
+      detectGesture(landmarks);
     }
   } else {
-    text.innerHTML = "Show your hand ✋";
+    gestureText.innerText = "No hand detected";
   }
-}
-
-// ANIMATE
-function animate(){
-  requestAnimationFrame(animate);
-
-  stars.rotation.y += 0.0005;
-  particles.rotation.y += 0.002;
-  particles.rotation.x += 0.001;
-
-  renderer.render(scene,camera3D);
-}
-animate();
-
-window.addEventListener("resize", ()=>{
-  camera3D.aspect = window.innerWidth/window.innerHeight;
-  camera3D.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+const camera = new Camera(video,{
+  onFrame: async ()=>{
+    await hands.send({image: video});
+  },
+  width:640,
+  height:480
+});
+
+camera.start();
+
+function detectGesture(lm){
+  let thumb = lm[4].y < lm[3].y;
+  let index = lm[8].y < lm[6].y;
+  let middle = lm[12].y < lm[10].y;
+  let ring = lm[16].y < lm[14].y;
+  let pinky = lm[20].y < lm[18].y;
+
+  let gesture = "Unknown";
+
+  if(index && middle && ring && pinky && thumb){
+    gesture = "✋ Open Hand";
+  }
+  else if(!index && !middle && !ring && !pinky){
+    gesture = "✊ Fist";
+  }
+  else if(thumb && !index && !middle && !ring && !pinky){
+    gesture = "👍 Thumbs Up";
+  }
+  else if(index && middle && !ring && !pinky){
+    gesture = "✌ Peace";
+  }
+  else if(thumb && index && !middle && !ring && !pinky){
+    gesture = "👌 OK";
+  }
+
+  gestureText.innerText = "Gesture: " + gesture;
+}
 </script>
 
 </body>
