@@ -2,118 +2,167 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Hand Gesture Test</title>
+<title>3D Galaxy Hand Control 💖</title>
 <style>
 body{
   margin:0;
+  overflow:hidden;
   background:black;
-  color:cyan;
   font-family:Arial;
 }
 video{
   position:fixed;
   top:10px;
   right:10px;
-  width:200px;
+  width:160px;
   border-radius:10px;
   opacity:0.8;
-}
-canvas{
-  position:absolute;
-  top:0; left:0;
+  z-index:10;
 }
 #text{
-  position:fixed;
-  bottom:20px;
-  width:100%;
-  text-align:center;
-  font-size:26px;
+  position:absolute;
+  color:#ff77ff;
+  font-size:28px;
+  text-shadow:0 0 20px hotpink,0 0 40px magenta;
+  pointer-events:none;
 }
 </style>
 </head>
 <body>
 
 <video id="video" autoplay playsinline></video>
-<canvas id="canvas"></canvas>
 <div id="text">Show your hand ✋</div>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const text = document.getElementById("text");
+// ===== VIDEO =====
+const video=document.getElementById("video");
+const text=document.getElementById("text");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// ===== THREE JS =====
+const scene=new THREE.Scene();
+const camera3D=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer({alpha:true});
+renderer.setSize(window.innerWidth,window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-// Init Hands
-const hands = new Hands({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+// Galaxy particles
+const starsGeometry=new THREE.BufferGeometry();
+const starCount=2000;
+const positions=[];
+for(let i=0;i<starCount;i++){
+  positions.push((Math.random()-0.5)*50);
+  positions.push((Math.random()-0.5)*50);
+  positions.push((Math.random()-0.5)*50);
+}
+starsGeometry.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+const starsMaterial=new THREE.PointsMaterial({color:0xffffff,size:0.05});
+const stars=new THREE.Points(starsGeometry,starsMaterial);
+scene.add(stars);
+
+// Planet
+const planetGeo=new THREE.SphereGeometry(2,64,64);
+const planetMat=new THREE.MeshStandardMaterial({color:0x8800ff,emissive:0x220022});
+const planet=new THREE.Mesh(planetGeo,planetMat);
+scene.add(planet);
+
+const light=new THREE.PointLight(0xff00ff,2);
+light.position.set(5,5,5);
+scene.add(light);
+
+camera3D.position.z=8;
+
+// Animate
+function animate(){
+  requestAnimationFrame(animate);
+  stars.rotation.y+=0.0008;
+  planet.rotation.y+=0.002;
+  renderer.render(scene,camera3D);
+}
+animate();
+
+// ===== MEDIAPIPE HAND =====
+const hands=new Hands({
+  locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
-
 hands.setOptions({
   maxNumHands:1,
-  modelComplexity:1,
-  minDetectionConfidence:0.7,
-  minTrackingConfidence:0.7
+  modelComplexity:0,
+  minDetectionConfidence:0.5,
+  minTrackingConfidence:0.5
 });
 
-// Camera
-const camera = new Camera(video, {
-  onFrame: async () => {
-    await hands.send({image: video});
-  },
-  width:640,
-  height:480
+const camera=new Camera(video,{
+  onFrame:async()=>{await hands.send({image:video});},
+  width:640,height:480
 });
 camera.start();
 
-// Draw + detect
+let lastGesture="";
+
+// ===== HAND RESULTS =====
 hands.onResults(results=>{
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
   if(results.multiHandLandmarks){
-    const lm = results.multiHandLandmarks[0];
-
-    drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:"#00ffff", lineWidth:3});
-    drawLandmarks(ctx, lm, {color:"#ff00ff", lineWidth:2});
-
-    detectGesture(lm);
+    detectGesture(results.multiHandLandmarks[0]);
   } else {
     text.innerText="Show your hand ✋";
   }
 });
 
-function isUp(lm, tip, pip){
+// ===== GESTURE =====
+function isUp(lm,tip,pip){
   return lm[tip].y < lm[pip].y;
 }
 
 function detectGesture(lm){
-  let index = isUp(lm,8,6);
-  let middle = isUp(lm,12,10);
-  let ring = isUp(lm,16,14);
-  let pinky = isUp(lm,20,18);
+  let index=isUp(lm,8,6);
+  let middle=isUp(lm,12,10);
+  let ring=isUp(lm,16,14);
+  let pinky=isUp(lm,20,18);
 
-  if(index && !middle && !ring && !pinky){
+  let gesture="";
+  if(index && !middle && !ring && !pinky) gesture="POINT";
+  else if(index && middle && ring && pinky) gesture="OPEN";
+  else if(!index && !middle && !ring && !pinky) gesture="FIST";
+  else if(index && middle && !ring && !pinky) gesture="PEACE";
+  else gesture="OTHER";
+
+  // posisi text ikut jari telunjuk
+  let x=lm[8].x*window.innerWidth;
+  let y=lm[8].y*window.innerHeight;
+  text.style.left=x+"px";
+  text.style.top=y+"px";
+
+  if(gesture==="POINT"){
     text.innerText="I Love You MIESHELLA 💕";
+    planet.material.color.setHex(Math.random()*0xffffff);
+    planet.scale.set(1.3,1.3,1.3);
   }
-  else if(index && middle && !ring && !pinky){
-    text.innerText="Peace ✌️";
+  else if(gesture==="OPEN"){
+    text.innerText="Galaxy Speed 🚀";
+    stars.rotation.y+=0.01;
   }
-  else if(index && middle && ring && pinky){
-    text.innerText="Open Hand ✋";
+  else if(gesture==="FIST"){
+    text.innerText="Galaxy Calm 🌌";
+    planet.scale.set(1,1,1);
   }
-  else if(!index && !middle && !ring && !pinky){
-    text.innerText="Fist ✊";
+  else if(gesture==="PEACE"){
+    text.innerText="New Planet ✨";
+    planet.material.color.setHex(Math.random()*0xffffff);
   }
   else{
-    text.innerText="Gesture detected...";
+    text.innerText="Show your hand ✋";
   }
 }
+
+window.addEventListener("resize",()=>{
+  camera3D.aspect=window.innerWidth/window.innerHeight;
+  camera3D.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
 </script>
 
 </body>
