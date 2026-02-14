@@ -10,47 +10,41 @@ body{
   background:black;
   font-family:Arial;
 }
-video,canvas{
+
+/* kamera kecil */
+video{
+  position:fixed;
+  top:10px;
+  right:10px;
+  width:160px;
+  border-radius:10px;
+  opacity:0.7;
+  z-index:10;
+}
+
+/* canvas galaxy */
+canvas{
   position:absolute;
   top:0;left:0;
 }
+
 #text{
   position:fixed;
-  bottom:30px;
+  bottom:25px;
   width:100%;
   text-align:center;
-  font-size:30px;
+  font-size:28px;
   color:#ff66ff;
-  text-shadow:0 0 25px hotpink;
-  animation:pulse 1.5s infinite alternate;
+  text-shadow:0 0 20px hotpink;
 }
-@keyframes pulse{
-  from{transform:scale(1);}
-  to{transform:scale(1.1);}
-}
-
 .heart{
   position:absolute;
   font-size:22px;
-  pointer-events:none;
   animation:float 2s linear forwards;
 }
 @keyframes float{
   from{opacity:1;}
   to{transform:translateY(-200px);opacity:0;}
-}
-
-.particle{
-  position:absolute;
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  pointer-events:none;
-  animation:burst 1.5s linear forwards;
-}
-@keyframes burst{
-  from{opacity:1;transform:translate(0,0) scale(1);}
-  to{opacity:0;transform:translate(var(--x),var(--y)) scale(0);}
 }
 </style>
 </head>
@@ -75,23 +69,25 @@ canvas.height=window.innerHeight;
 const hands=new Hands({
   locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
+
 hands.setOptions({
   maxNumHands:1,
   minDetectionConfidence:0.7,
   minTrackingConfidence:0.7
 });
 
-let galaxy=[];
-let rotationSpeed=0.003;
+// ===== GALAXY =====
+let stars=[];
+let speed=0.003;
 let lastGesture="";
 
 function createGalaxy(){
-  galaxy=[];
+  stars=[];
   for(let i=0;i<1000;i++){
-    galaxy.push({
+    stars.push({
       angle:Math.random()*Math.PI*2,
       radius:Math.random()*250,
-      speed:Math.random()*0.003+0.001,
+      spin:Math.random()*0.003+0.001,
       color:`hsl(${Math.random()*360},100%,70%)`
     });
   }
@@ -103,17 +99,29 @@ function drawGalaxy(){
   let cx=canvas.width/2;
   let cy=canvas.height/2;
 
-  galaxy.forEach(p=>{
-    p.angle+=p.speed+rotationSpeed;
-    let x=cx+Math.cos(p.angle)*p.radius;
-    let y=cy+Math.sin(p.angle)*p.radius;
-    ctx.fillStyle=p.color;
+  stars.forEach(s=>{
+    s.angle+=s.spin+speed;
+    let x=cx+Math.cos(s.angle)*s.radius;
+    let y=cy+Math.sin(s.angle)*s.radius;
+    ctx.fillStyle=s.color;
     ctx.fillRect(x,y,2,2);
   });
+
   requestAnimationFrame(drawGalaxy);
 }
 drawGalaxy();
 
+// ===== CAMERA =====
+const camera=new Camera(video,{
+  onFrame:async()=>{
+    await hands.send({image:video});
+  },
+  width:640,
+  height:480
+});
+camera.start();
+
+// ===== HAND DETECT =====
 hands.onResults(results=>{
   if(results.multiHandLandmarks){
     detectGesture(results.multiHandLandmarks[0]);
@@ -122,18 +130,11 @@ hands.onResults(results=>{
   }
 });
 
-const camera=new Camera(video,{
-  onFrame:async()=>{await hands.send({image:video});},
-  width:640,height:480
-});
-camera.start();
-
 function isUp(lm,tip,pip){
   return lm[tip].y < lm[pip].y;
 }
 
 function detectGesture(lm){
-  let thumb=isUp(lm,4,2);
   let index=isUp(lm,8,6);
   let middle=isUp(lm,12,10);
   let ring=isUp(lm,16,14);
@@ -142,13 +143,12 @@ function detectGesture(lm){
   let gesture="";
 
   if(index && !middle && !ring && !pinky) gesture="POINT";
-  else if(index && middle && ring && pinky && thumb) gesture="OPEN";
+  else if(index && middle && ring && pinky) gesture="OPEN";
   else if(!index && !middle && !ring && !pinky) gesture="FIST";
   else if(index && middle && !ring && !pinky) gesture="PEACE";
   else gesture="OTHER";
 
   if(gesture!==lastGesture){
-    galaxyBurst();
     lastGesture=gesture;
   }
 
@@ -157,11 +157,11 @@ function detectGesture(lm){
     spawnHearts();
   }
   else if(gesture==="OPEN"){
-    rotationSpeed=0.01;
+    speed=0.01;
     text.innerText="Galaxy Speed 🚀";
   }
   else if(gesture==="FIST"){
-    rotationSpeed=0.001;
+    speed=0.001;
     text.innerText="Galaxy Calm 🌌";
   }
   else if(gesture==="PEACE"){
@@ -173,22 +173,9 @@ function detectGesture(lm){
   }
 }
 
-function galaxyBurst(){
-  for(let i=0;i<40;i++){
-    const p=document.createElement("div");
-    p.className="particle";
-    p.style.left=window.innerWidth/2+"px";
-    p.style.top=window.innerHeight/2+"px";
-    p.style.background=`hsl(${Math.random()*360},100%,70%)`;
-    p.style.setProperty("--x",(Math.random()-0.5)*500+"px");
-    p.style.setProperty("--y",(Math.random()-0.5)*500+"px");
-    document.body.appendChild(p);
-    setTimeout(()=>p.remove(),1500);
-  }
-}
-
+// ===== HEART EFFECT =====
 function spawnHearts(){
-  for(let i=0;i<10;i++){
+  for(let i=0;i<6;i++){
     const h=document.createElement("div");
     h.className="heart";
     h.innerHTML="💖";
@@ -204,5 +191,6 @@ window.addEventListener("resize",()=>{
   canvas.height=window.innerHeight;
 });
 </script>
+
 </body>
 </html>
